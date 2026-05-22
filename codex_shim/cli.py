@@ -114,12 +114,19 @@ def generate(settings_path: Path, port: int) -> None:
     print("No files under ~/.codex were modified.")
 
 
+_REASONING_LEVELS = {"low", "medium", "high", "xhigh"}
+
+
 def install_codex_config(
     settings_path: Path,
     port: int,
     model_slug: str | None = None,
     reasoning_effort: str | None = None,
 ) -> None:
+    if reasoning_effort is not None and reasoning_effort not in _REASONING_LEVELS:
+        raise ValueError(
+            f"reasoning_effort must be one of {sorted(_REASONING_LEVELS)}; got {reasoning_effort!r}"
+        )
     models = FactorySettings(settings_path).load()
     default_slug = _resolve_model_slug(models, model_slug)
     provider_name = _provider_name_for_slug(settings_path, default_slug)
@@ -487,6 +494,16 @@ def _remove_managed_config(text: str) -> str:
     while MANAGED_BEGIN in text:
         before, rest = text.split(MANAGED_BEGIN, 1)
         if MANAGED_END not in rest:
+            # Incomplete managed block — likely a crashed mid-write. Discard the
+            # partial tail (it's not parseable TOML anyway) but flag it so the
+            # user knows their original config beyond this point is gone.
+            print(
+                f"WARNING: {CODEX_CONFIG_PATH} has an unterminated managed block; "
+                f"discarding everything after the opening sentinel. If you had "
+                f"hand-written config after this point, restore it from "
+                f"{CODEX_CONFIG_BACKUP_PATH} (if present).",
+                file=sys.stderr,
+            )
             return before
         _, after = rest.split(MANAGED_END, 1)
         text = before + after

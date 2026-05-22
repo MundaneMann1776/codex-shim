@@ -93,3 +93,35 @@ def test_providers_reasoning_effort_falls_back_on_bad_data(tmp_path: Path):
     p = tmp_path / "settings.json"
     p.write_text(json.dumps({"reasoningEffort": "bogus"}))
     assert ProvidersSettings(p).get_reasoning_effort() == "medium"
+
+
+def test_install_codex_config_rejects_invalid_reasoning_effort(tmp_path: Path):
+    settings = tmp_path / "settings.json"
+    settings.write_text(json.dumps({"customModels": [
+        {"model": "x", "displayName": "X", "provider": "openai",
+         "baseUrl": "https://api.x/v1", "apiKey": "k"}
+    ]}))
+    with pytest.raises(ValueError, match="reasoning_effort"):
+        cli.install_codex_config(settings, 8765, model_slug="x", reasoning_effort="turbo")
+
+
+def test_remove_managed_config_warns_on_unterminated_block(capsys):
+    text = '# user before\nfoo = "bar"\n' + cli.MANAGED_BEGIN + '\nmodel = "x"\n'
+    # No MANAGED_END — simulates a crashed mid-write.
+    result = cli._remove_managed_config(text)
+    assert result == '# user before\nfoo = "bar"\n'
+    captured = capsys.readouterr()
+    assert "unterminated managed block" in captured.err
+
+
+def test_remove_managed_config_strips_complete_block_silently(capsys):
+    text = (
+        '# user before\nfoo = "bar"\n'
+        + cli.MANAGED_BEGIN + '\nmodel = "x"\n' + cli.MANAGED_END
+        + '\n# user after\n'
+    )
+    result = cli._remove_managed_config(text)
+    assert '# user before' in result
+    assert '# user after' in result
+    assert 'model = "x"' not in result
+    assert capsys.readouterr().err == ""  # no warning for a healthy block
