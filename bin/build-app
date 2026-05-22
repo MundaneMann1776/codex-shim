@@ -10,9 +10,12 @@ set -euo pipefail
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
-APP_BUNDLE="$PROJECT_ROOT/Shim.app"
+# The canonical installed location. We build directly here — no project-local
+# duplicate, so Finder/LaunchServices only ever see one bundle.
+APP_BUNDLE="$HOME/Applications/shim.app"
 LAUNCHER="$APP_BUNDLE/Contents/MacOS/codex-shim-app"
 INFO_PLIST="$APP_BUNDLE/Contents/Info.plist"
+mkdir -p "$HOME/Applications"
 
 # ~/Library is NOT TCC-restricted — the app can import from here without a
 # "Files & Folders" permission prompt.
@@ -152,9 +155,9 @@ cat > "$INFO_PLIST" <<'PLIST'
     <key>CFBundleIdentifier</key>
     <string>com.factory.codex-shim</string>
     <key>CFBundleName</key>
-    <string>Shim</string>
+    <string>shim</string>
     <key>CFBundleDisplayName</key>
-    <string>Shim</string>
+    <string>shim</string>
     <key>CFBundleExecutable</key>
     <string>codex-shim-app</string>
     <key>CFBundlePackageType</key>
@@ -198,26 +201,17 @@ clang -Os -o "$LAUNCHER" "$TMP_C" \
 }
 echo "→ Launcher compiled: $LAUNCHER"
 
-# --- Clear quarantine ---
+# --- Clear quarantine + ad-hoc sign ---
 xattr -cr "$APP_BUNDLE" 2>/dev/null || true
 codesign --force --deep --sign - "$APP_BUNDLE" >/dev/null 2>&1 || true
 
-# --- Optionally install into ~/Applications/ ---
-if [[ "${1:-}" == "--install" ]]; then
-    USER_APPS="$HOME/Applications"
-    mkdir -p "$USER_APPS"
-    TARGET="$USER_APPS/Shim.app"
-    rm -rf "$USER_APPS/Codex Shim.app"
-    rm -rf "$TARGET"
-    cp -R "$APP_BUNDLE" "$TARGET"
-    xattr -cr "$TARGET" 2>/dev/null || true
-    /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister \
-        -f "$TARGET" 2>/dev/null || true
-    echo "→ Installed to:   $TARGET"
-fi
+# --- Register with LaunchServices so Finder/Spotlight show the right bundle ---
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister \
+    -f "$APP_BUNDLE" 2>/dev/null || true
 
 echo ""
-echo "✓ Done!  Launch: open \"$APP_BUNDLE\""
+echo "✓ Installed to: $APP_BUNDLE"
+echo "  Launch:       open \"$APP_BUNDLE\""
 echo ""
 echo "Update workflow:  git pull && bin/build-app"
 echo "Login Items:      System Settings → General → Login Items → +"

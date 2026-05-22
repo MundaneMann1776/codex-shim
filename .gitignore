@@ -27,5 +27,8 @@ dist/
 .vscode/
 
 # Built macOS app bundles — produced by bin/build-app
+# (bin/build-app installs into ~/Applications/shim.app — never into the project,
+# but keep this guard in case anyone builds in-tree by accident)
+shim.app/
 Shim.app/
 Codex Shim.app/

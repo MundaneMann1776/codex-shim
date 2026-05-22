@@ -19,7 +19,7 @@ in one click and the shim gets entirely out of the path.
 
 ```
         ┌────────────────────────────────────────────┐
-        │ ☰  Shim                                    │
+        │ ☰  shim                                    │
         │ ● Active: DeepSeek — DeepSeek-V3.1         │
         │ ─────                                       │
         │ ChatGPT Subscription (native, no shim)     │
@@ -47,12 +47,12 @@ tokens. No middleman, no extra latency, no failure mode if the shim crashes.
 Requires macOS 13+, Python 3.11+, and Codex Desktop already installed.
 
 ```bash
-git clone https://github.com/MundaneMann1776/codex-shim ~/Documents/codex-shim
-cd ~/Documents/codex-shim
+git clone https://github.com/MundaneMann1776/shim ~/Documents/shim
+cd ~/Documents/shim
 python3 -m venv .venv
 .venv/bin/pip install -e .
-bin/build-app                       # compiles the Mach-O launcher → Shim.app
-open Shim.app                       # menubar icon appears
+bin/build-app                       # compiles + installs to ~/Applications/shim.app
+open ~/Applications/shim.app        # menubar icon appears
 ```
 
 Add it to **System Settings → General → Login Items** if you want it always
@@ -162,11 +162,11 @@ Add a provider in the menubar (**Manage API Keys…**) or by editing
 
 ```
 codex_shim/             python: server, cli, menubar, translation
-bin/build-app           compile Shim.app launcher (Mach-O + embedded Python)
+bin/build-app           compile + install ~/Applications/shim.app (Mach-O + embedded Python)
 assets/AppIcon.icns     menubar app icon source
 tests/                  pytest suite
 .codex-shim/            generated catalog / config backup / logs / pid (gitignored)
-Shim.app/               built menubar app bundle (gitignored)
+~/Applications/shim.app               built menubar app bundle (gitignored)
 ```
 
 ---

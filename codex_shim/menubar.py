@@ -188,7 +188,7 @@ def _active_provider_label() -> str:
 
 class CodexShimApp(rumps.App):
     def __init__(self):
-        super().__init__("Shim", title=MENU_BAR_TITLE, quit_button=None)
+        super().__init__("shim", title=MENU_BAR_TITLE, quit_button=None)
         # Hide from Dock and set the initial SF Symbol icon.
         # This fires 50 ms after the run loop starts — by that point rumps has
         # called initializeStatusBar() so nsstatusitem exists.
