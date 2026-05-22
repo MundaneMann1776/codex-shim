@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import rumps
+from AppKit import NSApplication, NSApplicationActivationPolicyAccessory
 
 from .cli import (
     DEFAULT_PORT,
@@ -77,114 +78,6 @@ def _show_log(_sender=None) -> None:
 
 
 # ---------------------------------------------------------------------------
-# "Add API Key" flow
-# ---------------------------------------------------------------------------
-
-def _run_add_provider_flow(app: "CodexShimApp") -> None:
-    """Multi-step dialog: paste key → auto-detect or pick provider → save."""
-    ps = ProvidersSettings(SETTINGS_PATH)
-
-    # Step 1 — paste the key
-    w = rumps.Window(
-        message="Paste your API key:",
-        title="Add Provider",
-        default_text="",
-        ok="Next",
-        cancel="Cancel",
-        dimensions=(400, 26),
-    )
-    resp = w.run()
-    if not resp.clicked:
-        return
-    api_key = resp.text.strip()
-    if not api_key:
-        rumps.alert("No key entered.")
-        return
-
-    # Step 2 — pick provider (pre-select if detectable)
-    from .providers import detect_provider
-    guessed = detect_provider(api_key)
-
-    provider_options = list(PROVIDER_DEFS.keys())
-    provider_names   = [PROVIDER_DEFS[k]["name"] for k in provider_options]
-    default_index    = provider_options.index(guessed) if guessed in provider_options else 0
-
-    choice_text = "\n".join(
-        f"  {i+1}. {name}" for i, name in enumerate(provider_names)
-    )
-    hint = f"(detected: {PROVIDER_DEFS[guessed]['name']})" if guessed else "(select one)"
-
-    w2 = rumps.Window(
-        message=(
-            f"Which provider? {hint}\n\n{choice_text}\n\nEnter the number:"
-        ),
-        title="Add Provider",
-        default_text=str(default_index + 1),
-        ok="Add",
-        cancel="Cancel",
-        dimensions=(300, 26),
-    )
-    resp2 = w2.run()
-    if not resp2.clicked:
-        return
-
-    try:
-        idx = int(resp2.text.strip()) - 1
-        provider_key = provider_options[idx]
-    except (ValueError, IndexError):
-        rumps.alert("Invalid choice.")
-        return
-
-    # Step 3 — save + fetch models
-    ps.add_provider(provider_key, api_key)
-    invalidate_cache(provider_key, api_key)
-    rumps.alert(
-        f"{PROVIDER_DEFS[provider_key]['name']} added",
-        "Fetching available models in the background…",
-    )
-    # Kick off model fetch in background so the menu refreshes
-    threading.Thread(
-        target=lambda: (get_models(provider_key, api_key), app._rebuild_and_poll()),
-        daemon=True,
-    ).start()
-
-
-# ---------------------------------------------------------------------------
-# "Remove provider" flow
-# ---------------------------------------------------------------------------
-
-def _run_remove_provider_flow(app: "CodexShimApp") -> None:
-    ps = ProvidersSettings(SETTINGS_PATH)
-    providers = ps.get_providers()
-    keys = [k for k in providers if providers[k].get("enabled", True)]
-    if not keys:
-        rumps.alert("No providers configured.")
-        return
-    names = [PROVIDER_DEFS.get(k, {}).get("name", k) for k in keys]
-    listing = "\n".join(f"  {i+1}. {n}" for i, n in enumerate(names))
-    w = rumps.Window(
-        message=f"Which provider to remove?\n\n{listing}\n\nEnter the number:",
-        title="Remove Provider",
-        default_text="1",
-        ok="Remove",
-        cancel="Cancel",
-        dimensions=(300, 26),
-    )
-    resp = w.run()
-    if not resp.clicked:
-        return
-    try:
-        idx = int(resp.text.strip()) - 1
-        pkey = keys[idx]
-    except (ValueError, IndexError):
-        rumps.alert("Invalid choice.")
-        return
-    ps.remove_provider(pkey)
-    rumps.alert(f"Removed {PROVIDER_DEFS.get(pkey, {}).get('name', pkey)}.")
-    app._rebuild_and_poll()
-
-
-# ---------------------------------------------------------------------------
 # Model-select callback builder
 # ---------------------------------------------------------------------------
 
@@ -228,6 +121,13 @@ def _make_model_callback(
 class CodexShimApp(rumps.App):
     def __init__(self):
         super().__init__(ICON_STOPPED, quit_button=None)
+        # Hide from Dock — fire via a one-shot timer so the run loop is live.
+        def _hide_dock(t):
+            t.stop()
+            NSApplication.sharedApplication().setActivationPolicy_(
+                NSApplicationActivationPolicyAccessory
+            )
+        rumps.Timer(_hide_dock, 0.05).start()
         self._lock = threading.Lock()
         self._build_menu()
         self._timer = rumps.Timer(self._poll, 3)
@@ -315,8 +215,7 @@ class CodexShimApp(rumps.App):
         self.menu.add(rumps.separator)
 
         # ── Provider management ───────────────────────────────────────────
-        self.menu.add(rumps.MenuItem("Add API key…",       callback=self._on_add_key))
-        self.menu.add(rumps.MenuItem("Remove provider…",   callback=self._on_remove_provider))
+        self.menu.add(rumps.MenuItem("Manage API Keys…",   callback=self._on_manage_keys))
 
         self.menu.add(rumps.separator)
 
@@ -380,11 +279,9 @@ class CodexShimApp(rumps.App):
         ).start()
         rumps.alert("Refreshing…", "Model lists will update momentarily.")
 
-    def _on_add_key(self, _sender) -> None:
-        _run_add_provider_flow(self)
-
-    def _on_remove_provider(self, _sender) -> None:
-        _run_remove_provider_flow(self)
+    def _on_manage_keys(self, _sender) -> None:
+        from .dialog import show_manage_keys
+        show_manage_keys(SETTINGS_PATH, app=self)
 
     def _on_open_settings(self, _sender=None) -> None:
         _open_file(SETTINGS_PATH)
