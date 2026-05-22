@@ -14,6 +14,13 @@ macOS 13+, Python 3.11+, Codex Desktop already installed.
 
 ## Install
 
+Homebrew (CLI + Python package):
+
+    brew install MundaneMann1776/shim/shim
+    codex-shim-app &
+
+From source (also produces a standalone `~/Applications/shim.app`):
+
     git clone https://github.com/MundaneMann1776/shim ~/Documents/shim
     cd ~/Documents/shim
     python3 -m venv .venv
